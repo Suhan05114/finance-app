@@ -7,96 +7,205 @@ from openai import OpenAI
 
 st.set_page_config(page_title="个人理财储蓄助手 · 极简记账本", layout="wide")
 
-# [新增] 全局自定义 CSS 样式
+# [新增] 全局自定义 CSS 样式（集成 Font Awesome 6 专业图标库）
 st.markdown("""
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
 <style>
-    /* === 配色变量 === */
+    /* ============================================================
+       设计系统 · Design System
+       ============================================================ */
+
+    /* === 色彩令牌 === */
     :root {
-        --primary: #1a5276;
-        --secondary: #2e86c1;
-        --success: #27ae60;
-        --danger: #e74c3c;
-        --card-bg: #ffffff;
-        --page-bg: #f5f7fa;
+        --color-primary:      #1a56db;   /* 主色：深邃蓝 */
+        --color-primary-lt:   #3b82f6;   /* 主色浅 */
+        --color-accent:       #0891b2;   /* 强调：青蓝 */
+        --color-success:      #059669;   /* 成功/收入 */
+        --color-warning:      #d97706;   /* 警告 */
+        --color-danger:       #dc2626;   /* 危险/超支 */
+        --color-bg:           #f8fafc;   /* 页面背景 */
+        --color-card:         #ffffff;   /* 卡片背景 */
+        --color-sidebar:      #f1f5f9;   /* 侧边栏 */
+        --color-text:         #1e293b;   /* 正文 */
+        --color-text-muted:   #64748b;   /* 次要文字 */
+        --color-border:       #e2e8f0;   /* 边框 */
+        --radius-sm:          8px;
+        --radius-md:          12px;
+        --radius-lg:          16px;
+        --shadow-sm:          0 1px 3px rgba(0,0,0,.04);
+        --shadow-md:          0 4px 12px rgba(0,0,0,.06);
+        --shadow-lg:          0 8px 24px rgba(0,0,0,.08);
+        --transition:         all .25s cubic-bezier(.4,0,.2,1);
     }
 
-    /* === 页面背景 === */
+    /* === 全局 === */
     .stApp {
-        background-color: #f5f7fa;
+        background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+    }
+    .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+        max-width: 1200px;
     }
 
-    /* === 标题字体 === */
-    h1 { font-size: 2.2rem !important; color: #1a5276 !important; font-weight: 700 !important; }
-    h2 { font-size: 1.8rem !important; color: #1a5276 !important; font-weight: 600 !important; }
-    h3 { font-size: 1.4rem !important; color: #1a5276 !important; font-weight: 600 !important; }
+    /* === 标题层级 === */
+    h1 {
+        font-size: 1.8rem !important;
+        font-weight: 700 !important;
+        color: #0f172a !important;
+        letter-spacing: -0.02em;
+        margin-bottom: 0.25rem !important;
+    }
+    h1 i {
+        color: var(--color-primary);
+        margin-right: 10px;
+        font-size: 1.6rem;
+    }
+    h2 {
+        font-size: 1.4rem !important;
+        font-weight: 600 !important;
+        color: #1e293b !important;
+        letter-spacing: -0.01em;
+    }
+    h3 {
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+        color: #334155 !important;
+    }
+
+    /* === 分隔线 === */
+    hr, .stDivider {
+        border-color: var(--color-border) !important;
+        margin: 1.5rem 0 !important;
+    }
 
     /* === 卡片容器 === */
-    div[data-testid="stMetric"],
+    div[data-testid="stMetric"] {
+        background: var(--color-card);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        padding: 1.25rem 1rem;
+        box-shadow: var(--shadow-sm);
+        transition: var(--transition);
+    }
+    div[data-testid="stMetric"]:hover {
+        box-shadow: var(--shadow-md);
+        transform: translateY(-1px);
+    }
+    div[data-testid="stMetric"] label {
+        font-size: 0.8rem !important;
+        font-weight: 500 !important;
+        color: var(--color-text-muted) !important;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+    div[data-testid="stMetric"] div[data-testid="stMetricValue"] {
+        font-size: 1.5rem !important;
+        font-weight: 700 !important;
+        color: var(--color-text) !important;
+    }
+
+    /* === 表格 === */
     div[data-testid="stDataFrame"],
     div[data-testid="stTable"] {
-        background-color: #ffffff;
-        border-radius: 12px;
-        padding: 1rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        margin: 1.5rem 0;
+        background: var(--color-card);
+        border-radius: var(--radius-md);
+        box-shadow: var(--shadow-sm);
+        border: 1px solid var(--color-border);
+        padding: 0.5rem;
+    }
+    [data-testid="stDataFrame"] th,
+    [data-testid="stTable"] th {
+        background: #f8fafc !important;
+        color: #475569 !important;
+        font-weight: 600 !important;
+        font-size: 0.8rem !important;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border-bottom: 2px solid var(--color-border) !important;
+        padding: 0.75rem 1rem !important;
+    }
+    [data-testid="stDataFrame"] td,
+    [data-testid="stTable"] td {
+        padding: 0.65rem 1rem !important;
+        font-size: 0.9rem;
     }
 
     /* === 侧边栏 === */
     [data-testid="stSidebar"] {
-        background-color: #eef2f7;
+        background: var(--color-sidebar);
+        border-right: 1px solid var(--color-border);
     }
     [data-testid="stSidebar"] .stRadio label {
         padding: 8px 12px;
-        border-radius: 8px;
-        transition: all 0.2s;
+        border-radius: var(--radius-sm);
+        transition: var(--transition);
+        font-size: 0.9rem;
+        margin-bottom: 2px;
     }
     [data-testid="stSidebar"] .stRadio label:hover {
-        background-color: #dce6f0;
+        background: #e2e8f0;
     }
     [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label[data-selected="true"] span {
-        background-color: #2e86c1 !important;
+        background: var(--color-primary) !important;
+    }
+    [data-testid="stSidebar"] [data-testid="stMetric"] {
+        padding: 0.75rem;
+        margin: 0.25rem 0;
+    }
+    [data-testid="stSidebar"] [data-testid="stMetricValue"] {
+        font-size: 1.1rem !important;
     }
 
     /* === 按钮 === */
     .stButton > button {
-        border-radius: 10px !important;
+        border-radius: var(--radius-sm) !important;
         font-weight: 500 !important;
-        transition: all 0.2s !important;
+        font-size: 0.9rem !important;
+        transition: var(--transition) !important;
+        border: none !important;
     }
     .stButton > button:hover {
-        transform: scale(1.03);
-        box-shadow: 0 4px 12px rgba(46,134,193,0.3);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(26,86,219,.25);
     }
-    .stButton > button[kind="primary"] {
-        background-color: #2e86c1 !important;
-    }
-
-    /* === 数据表格列头 === */
-    [data-testid="stDataFrame"] th,
-    [data-testid="stTable"] th {
-        background-color: #1a5276 !important;
-        color: #ffffff !important;
-        font-weight: 600 !important;
+    .stButton > button:active {
+        transform: translateY(0);
     }
 
-    /* === 超支警告 === */
-    .stAlert[data-baseweb="notification"] {
-        border-radius: 10px;
+    /* === 信息提示 === */
+    .stAlert {
+        border-radius: var(--radius-sm) !important;
+        border: none !important;
+        font-size: 0.9rem;
     }
-    .st-er, .st-exception {
-        font-weight: 700 !important;
+
+    /* === 表单输入 === */
+    .stTextInput > div > div > input,
+    .stSelectbox > div > div > div,
+    .stNumberInput > div > div > input,
+    .stDateInput > div > div > input {
+        border-radius: var(--radius-sm) !important;
+        border-color: var(--color-border) !important;
+    }
+    .stTextInput > div > div > input:focus,
+    .stSelectbox > div > div > div:focus-within {
+        border-color: var(--color-primary) !important;
+        box-shadow: 0 0 0 3px rgba(26,86,219,.1) !important;
     }
 
     /* === 进度条 === */
     .stProgress > div > div {
-        border-radius: 10px;
+        border-radius: 20px;
     }
 
-    /* === 卡片 hover 增强 === */
-    [data-testid="stMetric"]:hover {
-        box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-        transition: box-shadow 0.3s;
-    }
+    /* ===== Font Awesome 图标样式 ===== */
+    .fa-icon-primary   { color: #1a56db; }
+    .fa-icon-success   { color: #059669; }
+    .fa-icon-danger    { color: #dc2626; }
+    .fa-icon-warning   { color: #d97706; }
+    .fa-icon-muted     { color: #94a3b8; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -205,7 +314,7 @@ cursor.execute("SELECT amount FROM budget WHERE year_month=? AND user_id=?", (ye
 budget_row = cursor.fetchone()
 conn.close()
 
-st.sidebar.subheader("📊 月度预算")
+st.sidebar.subheader("月度预算")
 budget_input = st.sidebar.number_input("设置本月预算总金额（元）", min_value=0, value=3000)
 if st.sidebar.button("保存预算"):
     conn = sqlite3.connect("finance.db")
@@ -221,7 +330,7 @@ if st.sidebar.button("保存预算"):
     st.sidebar.success("预算已保存！")
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("### 💡 预算执行")
+st.sidebar.markdown("### 预算执行")
 if budget_row:
     budget_amount = budget_row[0]
     remaining = budget_amount - monthly_expense
@@ -229,13 +338,13 @@ if budget_row:
     st.sidebar.metric("实际支出", f"¥{monthly_expense:.2f}")
     st.sidebar.metric("剩余", f"¥{remaining:.2f}")
     if monthly_expense > budget_amount:
-        st.sidebar.error(f"⚠️ 已超支 ¥{monthly_expense - budget_amount:.2f} 元")
+        st.sidebar.error(f"已超支 ¥{monthly_expense - budget_amount:.2f} 元")
 else:
     st.sidebar.info("未设置本月预算")
 
 # [新增] 侧边栏：类别预算管理
 st.sidebar.markdown("---")
-st.sidebar.subheader("📊 类别预算管理")
+st.sidebar.subheader("类别预算管理")
 
 # 查询当前月份已有的类别预算
 conn = sqlite3.connect("finance.db")
@@ -259,7 +368,7 @@ cat_select = st.sidebar.selectbox(
     key="cat_budget_select"
 )
 cat_amount = st.sidebar.number_input("类别预算金额（元）", min_value=0, value=0, key="cat_budget_amount")
-if st.sidebar.button("💾 保存类别预算"):
+if st.sidebar.button("保存类别预算"):
     conn = sqlite3.connect("finance.db")
     cursor = conn.cursor()
     cursor.execute(
@@ -283,8 +392,8 @@ if st.sidebar.button("💾 保存类别预算"):
 
 # ========== 页面内容 ==========
 if page == "🏠 记账主页":
-    st.title("📒 我的记账本")
-    st.caption("第一步：数据库已准备就绪，下一步将添加记账表单。")
+    st.markdown('<h1><i class="fa-solid fa-book-open"></i> 我的记账本</h1>', unsafe_allow_html=True)
+    st.caption("记录每一笔收支，轻松掌握个人财务")
 
     # [新增] 仪表盘区域
     conn = sqlite3.connect("finance.db")
@@ -327,7 +436,7 @@ if page == "🏠 记账主页":
 
     # [新增] 快捷录入（从数据库读取按钮）
     st.markdown("---")
-    st.subheader("⚡ 快捷录入")
+    st.markdown('<h2><i class="fa-solid fa-bolt"></i> 快捷录入</h2>', unsafe_allow_html=True)
 
     def quick_insert(name, category, amount):
         """向数据库插入一条快捷支出记录"""
@@ -359,13 +468,13 @@ if page == "🏠 记账主页":
         st.info("暂无快捷按钮，请去自定义页面添加")
 
     # [新增] 跳转到自定义页的按钮
-    if st.button("📝 自定义", key="goto_mgmt"):
+    if st.button("✎ 自定义", key="goto_mgmt"):
         st.session_state["nav_page"] = "⚙️ 自定义快捷按钮"
         st.rerun()
 
     # 记账表单
     st.markdown("---")
-    st.subheader("📝 记账表单")
+    st.markdown('<h2><i class="fa-solid fa-pen-to-square"></i> 记账表单</h2>', unsafe_allow_html=True)
     trans_type = st.radio("类型", ["支出", "收入"], index=0, key="trans_type_radio")
     if trans_type == "支出":
         category_options = ["餐饮", "购物", "交通", "娱乐", "住宿", "医疗", "教育", "通讯", "人情", "其他"]
@@ -389,12 +498,12 @@ if page == "🏠 记账主页":
         )
         conn.commit()
         conn.close()
-        st.success("记账成功！")
+        st.success("✓ 记账成功！")
 
     st.markdown("---")
 
     # 当前总余额
-    st.subheader("💰 当前总余额")
+    st.markdown('<h2><i class="fa-solid fa-coins"></i> 当前总余额</h2>', unsafe_allow_html=True)
     conn = sqlite3.connect("finance.db")
     cursor = conn.cursor()
     cursor.execute(
@@ -409,7 +518,7 @@ if page == "🏠 记账主页":
     st.markdown("---")
 
     # [修改] 本月支出按类别汇总（增加预算和进度列）
-    st.subheader("📂 本月支出分类汇总")
+    st.markdown('<h2><i class="fa-solid fa-table"></i> 本月支出分类汇总</h2>', unsafe_allow_html=True)
     cursor.execute(
         "SELECT category, SUM(amount) FROM transactions "
         "WHERE type='支出' AND substr(date, 1, 7)=? "
@@ -477,7 +586,7 @@ if page == "🏠 记账主页":
     st.markdown("---")
 
     # [修改] 交易记录（带筛选/搜索功能）
-    st.subheader("🕒 交易记录")
+    st.markdown('<h2><i class="fa-solid fa-clock-rotate-left"></i> 交易记录</h2>', unsafe_allow_html=True)
 
     # 查询所有可选月份和类别（用于筛选下拉框）
     conn = sqlite3.connect("finance.db")
@@ -528,7 +637,7 @@ if page == "🏠 记账主页":
 
 # ========== 页面：数据分析 ==========
 elif page == "📊 数据分析":
-    st.title("📊 数据分析")
+    st.markdown('<h1><i class="fa-solid fa-chart-line"></i> 数据分析</h1>', unsafe_allow_html=True)
     st.caption("支出与收入趋势及结构分析")
 
     # 预计算过去6个月列表（两个标签页共用）
@@ -541,12 +650,12 @@ elif page == "📊 数据分析":
             y -= 1
         months.append(f"{y}-{m:02d}")
 
-    tab1, tab2 = st.tabs(["📊 支出分析", "💰 收入分析"])
+    tab1, tab2 = st.tabs(["支出分析", "收入分析"])
 
     # ===== Tab 1：支出分析 =====
     with tab1:
         # 月度支出趋势图
-        st.subheader("📈 过去6个月支出趋势")
+        st.markdown('<h2><i class="fa-solid fa-arrow-trend-up"></i> 过去6个月支出趋势</h2>', unsafe_allow_html=True)
         conn = sqlite3.connect("finance.db")
         cursor = conn.cursor()
         cursor.execute(
@@ -576,7 +685,7 @@ elif page == "📊 数据分析":
         st.markdown("---")
 
         # 本月支出结构饼图
-        st.subheader("🍩 本月支出结构")
+        st.markdown('<h2><i class="fa-solid fa-chart-pie"></i> 本月支出结构</h2>', unsafe_allow_html=True)
         conn = sqlite3.connect("finance.db")
         exp_pie = pd.read_sql_query(
             "SELECT category, SUM(amount) AS total FROM transactions "
@@ -597,7 +706,7 @@ elif page == "📊 数据分析":
     # ===== Tab 2：收入分析 =====
     with tab2:
         # 月度收入趋势图
-        st.subheader("📈 过去6个月收入趋势")
+        st.markdown('<h2><i class="fa-solid fa-arrow-trend-up"></i> 过去6个月收入趋势</h2>', unsafe_allow_html=True)
         conn = sqlite3.connect("finance.db")
         cursor = conn.cursor()
         cursor.execute(
@@ -627,7 +736,7 @@ elif page == "📊 数据分析":
         st.markdown("---")
 
         # 本月收入结构饼图
-        st.subheader("🍩 本月收入结构")
+        st.markdown('<h2><i class="fa-solid fa-chart-pie"></i> 本月收入结构</h2>', unsafe_allow_html=True)
         conn = sqlite3.connect("finance.db")
         inc_pie = pd.read_sql_query(
             "SELECT category, SUM(amount) AS total FROM transactions "
@@ -647,9 +756,9 @@ elif page == "📊 数据分析":
 
     # AI 省钱建议
     st.markdown("---")
-    st.subheader("🤖 AI 省钱建议")
+    st.markdown('<h2><i class="fa-solid fa-robot"></i> AI 省钱建议</h2>', unsafe_allow_html=True)
 
-    if st.button("🤖 获取 AI 省钱建议"):
+    if st.button("AI 省钱建议", key="ai_advice"):
         # 查询最近30天的支出记录
         cutoff_date = (today - timedelta(days=30)).strftime("%Y-%m-%d")
         conn = sqlite3.connect("finance.db")
@@ -694,12 +803,12 @@ elif page == "📊 数据分析":
 
 # ========== 页面：月度报告 ==========
 elif page == "📋 月度报告":
-    st.title("📋 月度财务报告")
+    st.markdown('<h1><i class="fa-solid fa-file-invoice"></i> 月度财务报告</h1>', unsafe_allow_html=True)
     st.caption("基于 AI 自动生成本月财务分析报告")
 
     st.markdown("---")
 
-    if st.button("📊 生成月度报告"):
+    if st.button("生成月度报告", key="gen_report"):
         # 查询本月所有支出记录
         conn = sqlite3.connect("finance.db")
         cursor = conn.cursor()
@@ -787,7 +896,7 @@ elif page == "📋 月度报告":
 
 # ========== 页面：自定义快捷按钮 ==========
 elif page == "⚙️ 自定义快捷按钮":
-    st.title("⚙️ 自定义快捷按钮")
+    st.markdown('<h1><i class="fa-solid fa-sliders"></i> 自定义快捷按钮</h1>', unsafe_allow_html=True)
     st.caption("在这里添加或删除首页的快捷录入按钮")
 
     st.markdown("---")
@@ -807,7 +916,7 @@ elif page == "⚙️ 自定义快捷按钮":
         st.dataframe(display_df, use_container_width=True, hide_index=True)
 
         st.markdown("---")
-        st.subheader("🗑️ 删除按钮")
+        st.markdown('<h2><i class="fa-solid fa-trash-can"></i> 删除按钮</h2>', unsafe_allow_html=True)
         cols = st.columns(3)
         for i, (_, row) in enumerate(mgmt_df.iterrows()):
             btn_id = int(row["id"])
@@ -823,7 +932,7 @@ elif page == "⚙️ 自定义快捷按钮":
 
     # 添加新按钮
     st.markdown("---")
-    st.subheader("➕ 添加新按钮")
+    st.markdown('<h2><i class="fa-solid fa-circle-plus"></i> 添加新按钮</h2>', unsafe_allow_html=True)
     with st.form("add_quick_button"):
         new_name = st.text_input("按钮名称", placeholder="例如：午餐+30")
         new_category = st.selectbox(
@@ -849,6 +958,6 @@ elif page == "⚙️ 自定义快捷按钮":
 
     # [新增] 返回主页按钮
     st.markdown("---")
-    if st.button("🏠 返回记账主页"):
+    if st.button("返回记账主页"):
         st.session_state["nav_page"] = "🏠 记账主页"
         st.rerun()
