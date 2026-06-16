@@ -364,12 +364,10 @@ if page == "🏠 记账主页":
 
 # ========== 页面：数据分析 ==========
 elif page == "📊 数据分析":
-    st.title("📈 月度支出趋势")
-    st.caption("过去6个月的支出变化趋势")
+    st.title("� 数据分析")
+    st.caption("支出与收入趋势及结构分析")
 
-    st.markdown("---")
-
-    # 月度支出趋势图
+    # 预计算过去6个月列表（两个标签页共用）
     months = []
     for i in range(5, -1, -1):
         m = today.month - i
@@ -379,52 +377,109 @@ elif page == "📊 数据分析":
             y -= 1
         months.append(f"{y}-{m:02d}")
 
-    conn = sqlite3.connect("finance.db")
-    cursor = conn.cursor()
-    cursor.execute(
-        "SELECT substr(date, 1, 7) AS ym, SUM(amount) FROM transactions "
-        "WHERE type='支出' AND substr(date, 1, 7) IN ({}) "
-        "GROUP BY ym".format(",".join("?" * len(months))),
-        months
-    )
-    db_rows = dict(cursor.fetchall())
-    conn.close()
+    tab1, tab2 = st.tabs(["📊 支出分析", "💰 收入分析"])
 
-    trend_data = []
-    has_any_expense = False
-    for ym in months:
-        val = db_rows.get(ym, 0)
-        trend_data.append({"月份": ym, "支出总金额（元）": val})
-        if val > 0:
-            has_any_expense = True
+    # ===== Tab 1：支出分析 =====
+    with tab1:
+        # 月度支出趋势图
+        st.subheader("📈 过去6个月支出趋势")
+        conn = sqlite3.connect("finance.db")
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT substr(date, 1, 7) AS ym, SUM(amount) FROM transactions "
+            "WHERE type='支出' AND substr(date, 1, 7) IN ({}) "
+            "GROUP BY ym".format(",".join("?" * len(months))),
+            months
+        )
+        exp_rows = dict(cursor.fetchall())
+        conn.close()
 
-    if has_any_expense:
-        trend_df = pd.DataFrame(trend_data)
-        fig = px.line(trend_df, x="月份", y="支出总金额（元）", markers=True)
-        fig.update_traces(line=dict(width=2), marker=dict(size=8))
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("暂无支出数据，无法绘制趋势图")
+        exp_trend = []
+        has_exp = False
+        for ym in months:
+            val = exp_rows.get(ym, 0)
+            exp_trend.append({"月份": ym, "支出总金额（元）": val})
+            if val > 0:
+                has_exp = True
 
-    # 本月支出结构饼图
-    st.markdown("---")
-    st.subheader("🍩 本月支出结构")
-    conn = sqlite3.connect("finance.db")
-    pie_df = pd.read_sql_query(
-        "SELECT category, SUM(amount) AS total FROM transactions "
-        "WHERE type='支出' AND substr(date, 1, 7)=? "
-        "GROUP BY category",
-        conn,
-        params=(year_month,)
-    )
-    conn.close()
+        if has_exp:
+            fig1 = px.line(pd.DataFrame(exp_trend), x="月份", y="支出总金额（元）", markers=True)
+            fig1.update_traces(line=dict(width=2, color="#ff6b6b"), marker=dict(size=8, color="#ff6b6b"))
+            st.plotly_chart(fig1, use_container_width=True)
+        else:
+            st.info("暂无支出数据，无法绘制趋势图")
 
-    if not pie_df.empty:
-        pie_fig = px.pie(pie_df, names="category", values="total", title="本月支出结构", hole=0.3)
-        pie_fig.update_traces(textinfo="label+percent")
-        st.plotly_chart(pie_fig, use_container_width=True)
-    else:
-        st.info("本月暂无支出，无法生成饼图")
+        st.markdown("---")
+
+        # 本月支出结构饼图
+        st.subheader("🍩 本月支出结构")
+        conn = sqlite3.connect("finance.db")
+        exp_pie = pd.read_sql_query(
+            "SELECT category, SUM(amount) AS total FROM transactions "
+            "WHERE type='支出' AND substr(date, 1, 7)=? "
+            "GROUP BY category",
+            conn,
+            params=(year_month,)
+        )
+        conn.close()
+
+        if not exp_pie.empty:
+            fig2 = px.pie(exp_pie, names="category", values="total", title="本月支出结构", hole=0.3)
+            fig2.update_traces(textinfo="label+percent")
+            st.plotly_chart(fig2, use_container_width=True)
+        else:
+            st.info("本月暂无支出，无法生成饼图")
+
+    # ===== Tab 2：收入分析 =====
+    with tab2:
+        # 月度收入趋势图
+        st.subheader("📈 过去6个月收入趋势")
+        conn = sqlite3.connect("finance.db")
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT substr(date, 1, 7) AS ym, SUM(amount) FROM transactions "
+            "WHERE type='收入' AND substr(date, 1, 7) IN ({}) "
+            "GROUP BY ym".format(",".join("?" * len(months))),
+            months
+        )
+        inc_rows = dict(cursor.fetchall())
+        conn.close()
+
+        inc_trend = []
+        has_inc = False
+        for ym in months:
+            val = inc_rows.get(ym, 0)
+            inc_trend.append({"月份": ym, "收入总金额（元）": val})
+            if val > 0:
+                has_inc = True
+
+        if has_inc:
+            fig3 = px.line(pd.DataFrame(inc_trend), x="月份", y="收入总金额（元）", markers=True)
+            fig3.update_traces(line=dict(width=2, color="#4caf50"), marker=dict(size=8, color="#4caf50"))
+            st.plotly_chart(fig3, use_container_width=True)
+        else:
+            st.info("暂无收入数据，无法绘制趋势图")
+
+        st.markdown("---")
+
+        # 本月收入结构饼图
+        st.subheader("🍩 本月收入结构")
+        conn = sqlite3.connect("finance.db")
+        inc_pie = pd.read_sql_query(
+            "SELECT category, SUM(amount) AS total FROM transactions "
+            "WHERE type='收入' AND substr(date, 1, 7)=? "
+            "GROUP BY category",
+            conn,
+            params=(year_month,)
+        )
+        conn.close()
+
+        if not inc_pie.empty:
+            fig4 = px.pie(inc_pie, names="category", values="total", title="本月收入结构", hole=0.3)
+            fig4.update_traces(textinfo="label+percent")
+            st.plotly_chart(fig4, use_container_width=True)
+        else:
+            st.info("本月暂无收入，无法生成图表")
 
     # AI 省钱建议
     st.markdown("---")
