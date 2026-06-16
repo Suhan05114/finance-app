@@ -476,27 +476,59 @@ if page == "🏠 记账主页":
 
     st.markdown("---")
 
-    # [修改] 查询和展示增加备注列
-    st.subheader("🕒 最近10条交易记录")
+    # [修改] 交易记录（带筛选/搜索功能）
+    st.subheader("🕒 交易记录")
+
+    # 查询所有可选月份和类别（用于筛选下拉框）
     conn = sqlite3.connect("finance.db")
-    recent_df = pd.read_sql_query(
-        "SELECT date, type, category, amount, description FROM transactions ORDER BY date DESC LIMIT 10",
+    all_records_df = pd.read_sql_query(
+        "SELECT date, type, category, amount, description FROM transactions ORDER BY date DESC",
         conn
     )
     conn.close()
 
-    if not recent_df.empty:
-        recent_df.columns = ["日期", "类型", "类别", "金额（元）", "备注"]
-        recent_df["备注"] = recent_df["备注"].fillna("-")
-        recent_df["金额（元）"] = recent_df["金额（元）"].map(lambda x: f"¥{x:.2f}")
-        st.dataframe(recent_df, use_container_width=True, hide_index=True)
+    if not all_records_df.empty:
+        all_records_df.columns = ["日期", "类型", "类别", "金额（元）", "备注"]
+        all_records_df["备注"] = all_records_df["备注"].fillna("-")
+
+        # 筛选栏
+        month_options = sorted(all_records_df["日期"].apply(lambda x: x[:7]).unique(), reverse=True)
+        category_options = sorted(all_records_df["类别"].unique())
+
+        fc1, fc2, fc3 = st.columns(3)
+        with fc1:
+            selected_month = st.selectbox("月份筛选", ["全部月份"] + month_options)
+        with fc2:
+            selected_category = st.selectbox("类别筛选", ["全部类别"] + category_options)
+        with fc3:
+            keyword = st.text_input("关键词搜索", placeholder="搜索备注或类别...")
+
+        # 应用筛选
+        filtered_df = all_records_df.copy()
+        if selected_month != "全部月份":
+            filtered_df = filtered_df[filtered_df["日期"].str.startswith(selected_month)]
+        if selected_category != "全部类别":
+            filtered_df = filtered_df[filtered_df["类别"] == selected_category]
+        if keyword.strip():
+            kw = keyword.strip().lower()
+            filtered_df = filtered_df[
+                filtered_df["类别"].str.lower().str.contains(kw) |
+                filtered_df["备注"].str.lower().str.contains(kw)
+            ]
+
+        filtered_df["金额（元）"] = filtered_df["金额（元）"].apply(lambda x: f"¥{x:.2f}")
+
+        if not filtered_df.empty:
+            st.dataframe(filtered_df, use_container_width=True, hide_index=True)
+        else:
+            st.text("没有找到符合条件的交易记录")
     else:
         st.text("暂无交易记录")
 
 
 # ========== 页面：数据分析 ==========
 elif page == "📊 数据分析":
-    st.title("� 数据分析")
+    st.title("📊 数据分析")
     st.caption("支出与收入趋势及结构分析")
 
     # 预计算过去6个月列表（两个标签页共用）
