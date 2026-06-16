@@ -201,7 +201,7 @@ if page == "🏠 记账主页":
 
     st.markdown("---")
 
-    # 本月支出按类别汇总
+    # [修改] 本月支出按类别汇总（增加预算和进度列）
     st.subheader("📂 本月支出分类汇总")
     cursor.execute(
         "SELECT category, SUM(amount) FROM transactions "
@@ -210,12 +210,46 @@ if page == "🏠 记账主页":
         (year_month,)
     )
     rows = cursor.fetchall()
+
+    # 查询当前月份所有类别预算
+    cursor.execute(
+        "SELECT category, amount FROM category_budget WHERE year_month=? AND user_id=?",
+        (year_month, 1)
+    )
+    budget_map = dict(cursor.fetchall())
     conn.close()
 
     if rows:
-        df = pd.DataFrame(rows, columns=["类别", "金额（元）"])
-        df["金额（元）"] = df["金额（元）"].map(lambda x: f"¥{x:.2f}")
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        summary_data = []
+        for cat, spent in rows:
+            budget_amt = budget_map.get(cat, None)
+            if budget_amt is not None:
+                pct = min(spent / budget_amt * 100, 100) if budget_amt > 0 else 0
+                budget_display = f"¥{budget_amt:.2f}"
+                progress_display = f"{spent / budget_amt * 100:.0f}%" if budget_amt > 0 else "0%"
+            else:
+                budget_display = "未设置"
+                progress_display = "-"
+            summary_data.append({
+                "类别": cat,
+                "已花金额": f"¥{spent:.2f}",
+                "预算": budget_display,
+                "进度": progress_display
+            })
+
+        # 显示表格
+        summary_df = pd.DataFrame(summary_data)
+        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+
+        # 为每个有预算的类别显示进度条
+        for cat, spent in rows:
+            budget_amt = budget_map.get(cat, None)
+            if budget_amt is not None and budget_amt > 0:
+                pct = min(spent / budget_amt, 1.0)
+                if spent > budget_amt:
+                    st.progress(pct, text=f"{cat}：已超支！¥{spent:.2f} / ¥{budget_amt:.2f}")
+                else:
+                    st.progress(pct, text=f"{cat}：¥{spent:.2f} / ¥{budget_amt:.2f} ({pct*100:.0f}%)")
     else:
         st.text("本月暂无支出")
 
