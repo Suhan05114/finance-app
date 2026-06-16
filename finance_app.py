@@ -241,15 +241,29 @@ if page == "🏠 记账主页":
         summary_df = pd.DataFrame(summary_data)
         st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
-        # 为每个有预算的类别显示进度条
+        # [修改] 使用 st.markdown 自定义 HTML 进度条，颜色区分超支
         for cat, spent in rows:
             budget_amt = budget_map.get(cat, None)
             if budget_amt is not None and budget_amt > 0:
-                pct = min(spent / budget_amt, 1.0)
-                if spent > budget_amt:
-                    st.progress(pct, text=f"{cat}：已超支！¥{spent:.2f} / ¥{budget_amt:.2f}")
+                pct = spent / budget_amt
+                display_pct = min(pct, 1.0) * 100
+                if pct > 1.0:
+                    color = "#ff4444"
+                    label = "已超支"
                 else:
-                    st.progress(pct, text=f"{cat}：¥{spent:.2f} / ¥{budget_amt:.2f} ({pct*100:.0f}%)")
+                    color = "#4caf50"
+                    label = f"{pct * 100:.0f}%"
+                st.markdown(
+                    f'<div style="margin-bottom:4px;">'
+                    f'<span style="font-size:14px;display:inline-block;width:60px;">{cat}</span>'
+                    f'<span style="display:inline-block;width:calc(100% - 130px);vertical-align:middle;">'
+                    f'<div style="background:#e0e0e0;border-radius:10px;width:100%;height:20px;">'
+                    f'<div style="background:{color};border-radius:10px;width:{display_pct}%;height:20px;"></div>'
+                    f'</div></span>'
+                    f'<span style="font-size:14px;display:inline-block;width:60px;text-align:right;color:{color};">{label}</span>'
+                    f'</div>',
+                    unsafe_allow_html=True
+                )
     else:
         st.text("本月暂无支出")
 
