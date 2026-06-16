@@ -281,6 +281,31 @@ if cursor.fetchone()[0] == 0:
             (name, cat, amt)
         )
 
+# [新增] 负债管理表
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS debts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        debt_type TEXT,
+        total_amount REAL,
+        annual_rate REAL,
+        borrowed_date TEXT,
+        due_date TEXT,
+        status TEXT DEFAULT '进行中',
+        description TEXT DEFAULT '',
+        user_id INTEGER DEFAULT 1
+    )
+""")
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS debt_repayments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        debt_id INTEGER,
+        repayment_amount REAL,
+        repayment_date TEXT,
+        description TEXT DEFAULT '',
+        user_id INTEGER DEFAULT 1
+    )
+""")
+
 conn.commit()
 conn.close()
 
@@ -294,8 +319,8 @@ if "nav_page" not in st.session_state:
     st.session_state["nav_page"] = "🏠 记账主页"
 page = st.sidebar.radio(
     "导航",
-    ["🏠 记账主页", "📊 数据分析", "📋 月度报告", "⚙️ 自定义快捷按钮"],
-    index=["🏠 记账主页", "📊 数据分析", "📋 月度报告", "⚙️ 自定义快捷按钮"].index(st.session_state["nav_page"])
+    ["🏠 记账主页", "📊 数据分析", "📋 月度报告", "⚙️ 自定义快捷按钮", "📉 负债管理"],
+    index=["🏠 记账主页", "📊 数据分析", "📋 月度报告", "⚙️ 自定义快捷按钮", "📉 负债管理"].index(st.session_state["nav_page"])
 )
 st.session_state["nav_page"] = page
 
@@ -414,7 +439,7 @@ if page == "🏠 记账主页":
 
     monthly_balance = monthly_income - monthly_expense_dash
 
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     col1.metric("本月收入", f"¥{monthly_income:.2f}")
     col2.metric("本月支出", f"¥{monthly_expense_dash:.2f}")
 
@@ -433,6 +458,20 @@ if page == "🏠 记账主页":
             col4.metric("预算剩余", f"¥{budget_remaining:.2f}", delta=remaining_delta, delta_color="inverse")
     else:
         col4.metric("预算剩余", "未设置预算")
+
+    # [新增] 总负债余额
+    conn = sqlite3.connect("finance.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT COALESCE(SUM(d.total_amount - COALESCE(r.repaid, 0)), 0) "
+        "FROM debts d "
+        "LEFT JOIN (SELECT debt_id, SUM(repayment_amount) AS repaid FROM debt_repayments GROUP BY debt_id) r "
+        "ON d.id = r.debt_id "
+        "WHERE d.status = '进行中'"
+    )
+    total_debt = cursor.fetchone()[0]
+    conn.close()
+    col5.metric("总负债余额", f"¥{total_debt:.2f}")
 
     # [新增] 快捷录入（从数据库读取按钮）
     st.markdown("---")
@@ -961,3 +1000,143 @@ elif page == "⚙️ 自定义快捷按钮":
     if st.button("返回记账主页"):
         st.session_state["nav_page"] = "🏠 记账主页"
         st.rerun()
+
+# ========== 页面：负债管理 ==========
+elif page == "📉 负债管理":
+    st.markdown('<h1><i class="fa-solid fa-hand-holding-dollar"></i> 负债管理</h1>', unsafe_allow_html=True)
+    st.caption("记录借款与还款，清晰掌握负债状况")
+
+    st.markdown("---")
+
+    # ===== 区域1：记录借款 =====
+    st.markdown('<h2><i class="fa-solid fa-file-invoice-dollar"></i> 记录借款</h2>', unsafe_allow_html=True)
+    with st.form("add_debt_form"):
+        debt_type = st.selectbox("负债类型", ["花呗", "信用卡", "房贷", "车贷", "亲友借款", "其他"])
+        total_amount = st.number_input("借款金额（元）", min_value=0.01, step=1.0, format="%.2f")
+        annual_rate = st.number_input("年化利率（%，可选）", min_value=0.0, step=0.01, format="%.2f", help="如 3.6 表示年化 3.6%")
+        borrowed_date = st.date_input("借入日期", value=today)
+        due_date = st.date_input("预计还款日期（可选）", value=None)
+        debt_desc = st.text_input("备注（可选）", placeholder="例如：分期12个月")
+        debt_submitted = st.form_submit_button("记录借款")
+
+    if debt_submitted:
+        conn = sqlite3.connect("finance.db")
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO debts (debt_type, total_amount, annual_rate, borrowed_date, due_date, description, user_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (debt_type, total_amount, annual_rate if annual_rate > 0 else None,
+             borrowed_date.strftime("%Y-%m-%d"),
+             due_date.strftime("%Y-%m-%d") if due_date else None,
+             debt_desc, 1)
+        )
+        conn.commit()
+        conn.close()
+        st.success(f"✓ 已记录 {debt_type} 借款 ¥{total_amount:.2f}")
+
+    st.markdown("---")
+
+    # ===== 区域2：记录还款 =====
+    st.markdown('<h2><i class="fa-solid fa-money-bill-wave"></i> 记录还款</h2>', unsafe_allow_html=True)
+
+    # 查询进行中的负债列表
+    conn = sqlite3.connect("finance.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT d.id, d.debt_type, d.total_amount, "
+        "COALESCE(SUM(r.repayment_amount), 0) AS total_repaid "
+        "FROM debts d "
+        "LEFT JOIN debt_repayments r ON d.id = r.debt_id "
+        "WHERE d.status = '进行中' "
+        "GROUP BY d.id"
+    )
+    active_debts = cursor.fetchall()
+    conn.close()
+
+    if active_debts:
+        debt_options = []
+        debt_map = {}
+        for debt_id, d_type, total, repaid in active_debts:
+            remaining = total - repaid
+            label = f"[{d_type}] 剩余未还: ¥{remaining:.2f}"
+            debt_options.append(label)
+            debt_map[label] = debt_id
+        selected_debt_label = st.selectbox("选择要还款的负债", debt_options)
+        selected_debt_id = debt_map[selected_debt_label]
+
+        with st.form("add_repayment_form"):
+            repayment_amount = st.number_input("还款金额（元）", min_value=0.01, step=1.0, format="%.2f")
+            repayment_date = st.date_input("还款日期", value=today)
+            repayment_desc = st.text_input("备注（可选）", placeholder="例如：第3期还款")
+            repayment_submitted = st.form_submit_button("记录还款")
+
+        if repayment_submitted:
+            conn = sqlite3.connect("finance.db")
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO debt_repayments (debt_id, repayment_amount, repayment_date, description, user_id) VALUES (?, ?, ?, ?, ?)",
+                (selected_debt_id, repayment_amount, repayment_date.strftime("%Y-%m-%d"), repayment_desc, 1)
+            )
+            # 检查是否已还清
+            cursor.execute(
+                "SELECT d.total_amount, COALESCE(SUM(r.repayment_amount), 0) "
+                "FROM debts d LEFT JOIN debt_repayments r ON d.id = r.debt_id "
+                "WHERE d.id = ? GROUP BY d.id",
+                (selected_debt_id,)
+            )
+            total, repaid = cursor.fetchone()
+            if repaid >= total:
+                cursor.execute("UPDATE debts SET status='已结清' WHERE id=?", (selected_debt_id,))
+            conn.commit()
+            conn.close()
+            st.success(f"✓ 已记录还款 ¥{repayment_amount:.2f}")
+            st.rerun()
+    else:
+        st.info("暂无进行中的负债，请先记录借款")
+
+    st.markdown("---")
+
+    # ===== 区域3：负债总览 =====
+    st.markdown('<h2><i class="fa-solid fa-chart-simple"></i> 负债总览</h2>', unsafe_allow_html=True)
+
+    conn = sqlite3.connect("finance.db")
+    all_debts = pd.read_sql_query(
+        "SELECT d.id, d.debt_type, d.total_amount, d.annual_rate, d.borrowed_date, d.due_date, d.status, "
+        "COALESCE(SUM(r.repayment_amount), 0) AS total_repaid "
+        "FROM debts d "
+        "LEFT JOIN debt_repayments r ON d.id = r.debt_id "
+        "GROUP BY d.id "
+        "ORDER BY d.status ASC, d.borrowed_date DESC",
+        conn
+    )
+    conn.close()
+
+    if not all_debts.empty:
+        # 统计卡片
+        all_debts["remaining"] = all_debts["total_amount"] - all_debts["total_repaid"]
+        active_mask = all_debts["status"] == "进行中"
+        total_remaining = all_debts.loc[active_mask, "remaining"].sum()
+        active_count = active_mask.sum()
+        closed_count = (all_debts["status"] == "已结清").sum()
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("总负债余额", f"¥{total_remaining:.2f}")
+        m2.metric("进行中负债笔数", str(active_count))
+        m3.metric("已结清负债笔数", str(closed_count))
+
+        st.markdown("---")
+
+        # 详细表格
+        display_debts = all_debts.copy()
+        display_debts.columns = ["ID", "类型", "借款总额", "年化利率(%)", "借入日期", "预计还款日", "状态", "已还总额", "剩余未还"]
+        display_debts["年化利率(%)"] = display_debts["年化利率(%)"].apply(
+            lambda x: f"{x:.2f}%" if pd.notna(x) else "-"
+        )
+        display_debts["借款总额"] = display_debts["借款总额"].apply(lambda x: f"¥{x:.2f}")
+        display_debts["已还总额"] = display_debts["已还总额"].apply(lambda x: f"¥{x:.2f}")
+        display_debts["剩余未还"] = display_debts["剩余未还"].apply(lambda x: f"¥{x:.2f}")
+        display_debts["预计还款日"] = display_debts["预计还款日"].fillna("-")
+        display_debts = display_debts.rename(columns={"剩余未还": "剩余未还"})
+        table_cols = ["ID", "类型", "借款总额", "年化利率(%)", "已还总额", "剩余未还", "借入日期", "预计还款日", "状态"]
+        st.dataframe(display_debts[table_cols], use_container_width=True, hide_index=True)
+    else:
+        st.info("暂无负债数据")
