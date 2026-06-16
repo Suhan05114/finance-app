@@ -156,6 +156,36 @@ if page == "🏠 记账主页":
     st.title("📒 我的记账本")
     st.caption("第一步：数据库已准备就绪，下一步将添加记账表单。")
 
+    # [新增] 快捷录入
+    st.markdown("---")
+    st.subheader("⚡ 快捷录入")
+
+    def quick_insert(category, amount):
+        """向数据库插入一条快捷支出记录"""
+        conn = sqlite3.connect("finance.db")
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT INTO transactions (type, category, amount, date, description, user_id) VALUES (?, ?, ?, ?, ?, ?)",
+            ("支出", category, amount, today.strftime("%Y-%m-%d"), "快捷录入", 1)
+        )
+        conn.commit()
+        conn.close()
+        st.toast(f"✅ 已记录 {category} ¥{amount:.2f}", icon="💰")
+
+    quick_buttons = [
+        ("🍜 餐饮 +30", "餐饮", 30),
+        ("🚇 交通 +10", "交通", 10),
+        ("☕ 咖啡 +25", "餐饮", 25),
+        ("🛒 购物 +100", "购物", 100),
+        ("🍱 外卖 +35", "餐饮", 35),
+        ("🎬 娱乐 +50", "娱乐", 50),
+    ]
+
+    cols = st.columns(3)
+    for i, (label, cat, amt) in enumerate(quick_buttons):
+        if cols[i % 3].button(label, key=f"quick_{i}"):
+            quick_insert(cat, amt)
+
     # 记账表单
     st.markdown("---")
     st.subheader("📝 记账表单")
