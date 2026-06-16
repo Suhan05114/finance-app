@@ -11,6 +11,7 @@ st.set_page_config(page_title="个人理财储蓄助手 · 极简记账本", lay
 conn = sqlite3.connect("finance.db")
 cursor = conn.cursor()
 
+# [修改] 建表时包含 description 字段
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,9 +19,16 @@ cursor.execute("""
         category TEXT,
         amount REAL,
         date TEXT,
+        description TEXT DEFAULT '',
         user_id INTEGER DEFAULT 1
     )
 """)
+
+# [修改] 兼容旧表：如果 transactions 表不存在 description 列则添加
+cursor.execute("PRAGMA table_info(transactions)")
+columns = [col[1] for col in cursor.fetchall()]
+if "description" not in columns:
+    cursor.execute("ALTER TABLE transactions ADD COLUMN description TEXT DEFAULT ''")
 
 cursor.execute("""
     CREATE TABLE IF NOT EXISTS budget (
@@ -102,14 +110,17 @@ if page == "🏠 记账主页":
         category = st.selectbox("类别", category_options, index=0)
         amount = st.number_input("金额（元）", min_value=0, step=1)
         trans_date = st.date_input("日期", value=today)
+        # [修改] 新增备注输入框
+        description = st.text_input("备注（可选）", placeholder="例如：中午和朋友聚餐")
         submitted = st.form_submit_button("记一笔")
 
     if submitted:
         conn = sqlite3.connect("finance.db")
         cursor = conn.cursor()
+        # [修改] INSERT 增加 description 字段
         cursor.execute(
-            "INSERT INTO transactions (type, category, amount, date, user_id) VALUES (?, ?, ?, ?, ?)",
-            (trans_type, category, amount, trans_date.strftime("%Y-%m-%d"), 1)
+            "INSERT INTO transactions (type, category, amount, date, description, user_id) VALUES (?, ?, ?, ?, ?, ?)",
+            (trans_type, category, amount, trans_date.strftime("%Y-%m-%d"), description, 1)
         )
         conn.commit()
         conn.close()
@@ -152,17 +163,18 @@ if page == "🏠 记账主页":
 
     st.markdown("---")
 
-    # 最近10条交易记录
+    # [修改] 查询和展示增加备注列
     st.subheader("🕒 最近10条交易记录")
     conn = sqlite3.connect("finance.db")
     recent_df = pd.read_sql_query(
-        "SELECT date, type, category, amount FROM transactions ORDER BY date DESC LIMIT 10",
+        "SELECT date, type, category, amount, description FROM transactions ORDER BY date DESC LIMIT 10",
         conn
     )
     conn.close()
 
     if not recent_df.empty:
-        recent_df.columns = ["日期", "类型", "类别", "金额（元）"]
+        recent_df.columns = ["日期", "类型", "类别", "金额（元）", "备注"]
+        recent_df["备注"] = recent_df["备注"].fillna("-")
         recent_df["金额（元）"] = recent_df["金额（元）"].map(lambda x: f"¥{x:.2f}")
         st.dataframe(recent_df, use_container_width=True, hide_index=True)
     else:
@@ -242,7 +254,7 @@ elif page == "📊 数据分析":
         cutoff_date = (today - timedelta(days=30)).strftime("%Y-%m-%d")
         conn = sqlite3.connect("finance.db")
         ai_df = pd.read_sql_query(
-            "SELECT date, category, amount FROM transactions "
+            "SELECT date, category, amount, description FROM transactions "
             "WHERE type='支出' AND date >= ? ORDER BY date DESC",
             conn,
             params=(cutoff_date,)
@@ -254,7 +266,8 @@ elif page == "📊 数据分析":
         else:
             records_text = ""
             for _, row in ai_df.iterrows():
-                records_text += f"{row['date']} | {row['category']} | ¥{row['amount']:.2f}\n"
+                desc = f" ({row['description']})" if row['description'] else ""
+                records_text += f"{row['date']} | {row['category']} | ¥{row['amount']:.2f}{desc}\n"
 
             api_key = st.secrets.get("DEEPSEEK_API_KEY", "")
             if not api_key:
