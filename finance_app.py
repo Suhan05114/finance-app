@@ -66,12 +66,12 @@ cursor.execute("""
 cursor.execute("SELECT COUNT(*) FROM quick_buttons")
 if cursor.fetchone()[0] == 0:
     defaults = [
-        ("早餐+30", "餐饮", 30),
-        ("交通+10", "交通", 10),
-        ("咖啡+25", "餐饮", 25),
-        ("购物+100", "购物", 100),
-        ("外卖+35", "餐饮", 35),
-        ("娱乐+50", "娱乐", 50),
+        ("🍜 早餐+30", "餐饮", 30),
+        ("🚇 地铁+10", "交通", 10),
+        ("☕ 咖啡+25", "餐饮", 25),
+        ("🛒 购物+100", "购物", 100),
+        ("🍱 外卖+35", "餐饮", 35),
+        ("🎬 电影+50", "娱乐", 50),
     ]
     for name, cat, amt in defaults:
         cursor.execute(
@@ -87,7 +87,15 @@ year_month = today.strftime("%Y-%m")
 
 # ---------- 侧边栏：页面导航 ----------
 st.sidebar.markdown("---")
-page = st.sidebar.radio("导航", ["🏠 记账主页", "📊 数据分析", "📋 月度报告", "⚙️ 管理快捷按钮"])
+# 用 session_state 管理页面切换，支持从快捷录入区域跳转到管理页
+if "nav_page" not in st.session_state:
+    st.session_state["nav_page"] = "🏠 记账主页"
+page = st.sidebar.radio(
+    "导航",
+    ["🏠 记账主页", "📊 数据分析", "📋 月度报告", "⚙️ 管理快捷按钮"],
+    index=["🏠 记账主页", "📊 数据分析", "📋 月度报告", "⚙️ 管理快捷按钮"].index(st.session_state["nav_page"])
+)
+st.session_state["nav_page"] = page
 
 # ---------- 侧边栏：预算 ----------
 st.sidebar.markdown("---")
@@ -217,6 +225,11 @@ if page == "🏠 记账主页":
                 quick_insert(row["name"], row["category"], row["amount"])
     else:
         st.info("暂无快捷按钮，请去管理页面添加")
+
+    # [新增] 跳转到管理页的按钮
+    if st.button("📝 管理", key="goto_mgmt"):
+        st.session_state["nav_page"] = "⚙️ 管理快捷按钮"
+        st.rerun()
 
     # 记账表单
     st.markdown("---")
@@ -614,3 +627,9 @@ elif page == "⚙️ 管理快捷按钮":
             st.success(f"已添加按钮：{new_name}")
         else:
             st.warning("请输入按钮名称")
+
+    # [新增] 返回主页按钮
+    st.markdown("---")
+    if st.button("🏠 返回记账主页"):
+        st.session_state["nav_page"] = "🏠 记账主页"
+        st.rerun()
