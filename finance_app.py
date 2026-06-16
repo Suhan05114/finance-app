@@ -286,6 +286,45 @@ if page == "🏠 记账主页":
     st.title("📒 我的记账本")
     st.caption("第一步：数据库已准备就绪，下一步将添加记账表单。")
 
+    # [新增] 仪表盘区域
+    conn = sqlite3.connect("finance.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type='收入' AND substr(date, 1, 7)=?",
+        (year_month,)
+    )
+    monthly_income = cursor.fetchone()[0]
+    cursor.execute(
+        "SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type='支出' AND substr(date, 1, 7)=?",
+        (year_month,)
+    )
+    monthly_expense_dash = cursor.fetchone()[0]
+    cursor.execute("SELECT amount FROM budget WHERE year_month=? AND user_id=?", (year_month, 1))
+    budget_dash = cursor.fetchone()
+    conn.close()
+
+    monthly_balance = monthly_income - monthly_expense_dash
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("本月收入", f"¥{monthly_income:.2f}")
+    col2.metric("本月支出", f"¥{monthly_expense_dash:.2f}")
+
+    balance_delta = f"¥{monthly_balance:.2f}"
+    if monthly_balance >= 0:
+        col3.metric("本月结余", f"¥{monthly_balance:.2f}", delta=balance_delta)
+    else:
+        col3.metric("本月结余", f"¥{monthly_balance:.2f}", delta=balance_delta, delta_color="inverse")
+
+    if budget_dash:
+        budget_remaining = budget_dash[0] - monthly_expense_dash
+        remaining_delta = f"¥{budget_remaining:.2f}"
+        if budget_remaining >= 0:
+            col4.metric("预算剩余", f"¥{budget_remaining:.2f}", delta=remaining_delta)
+        else:
+            col4.metric("预算剩余", f"¥{budget_remaining:.2f}", delta=remaining_delta, delta_color="inverse")
+    else:
+        col4.metric("预算剩余", "未设置预算")
+
     # [新增] 快捷录入（从数据库读取按钮）
     st.markdown("---")
     st.subheader("⚡ 快捷录入")
