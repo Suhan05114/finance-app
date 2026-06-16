@@ -39,6 +39,17 @@ cursor.execute("""
     )
 """)
 
+# [新增] 类别预算表
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS category_budget (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category TEXT,
+        year_month TEXT,
+        amount REAL,
+        user_id INTEGER DEFAULT 1
+    )
+""")
+
 conn.commit()
 conn.close()
 
@@ -92,8 +103,55 @@ if budget_row:
 else:
     st.sidebar.info("未设置本月预算")
 
+# [新增] 侧边栏：类别预算管理
+st.sidebar.markdown("---")
+st.sidebar.subheader("📊 类别预算管理")
 
-# ========== 页面：记账主页 ==========
+# 查询当前月份已有的类别预算
+conn = sqlite3.connect("finance.db")
+cursor = conn.cursor()
+cursor.execute(
+    "SELECT category, amount FROM category_budget WHERE year_month=? AND user_id=? ORDER BY category",
+    (year_month, 1)
+)
+cat_budgets = cursor.fetchall()
+conn.close()
+
+if cat_budgets:
+    for cat, amt in cat_budgets:
+        st.sidebar.text(f"{cat}：¥{amt:.2f}")
+else:
+    st.sidebar.caption("暂无类别预算")
+
+cat_select = st.sidebar.selectbox(
+    "选择类别",
+    ["餐饮", "购物", "交通", "娱乐", "住宿", "医疗", "教育", "通讯", "人情", "其他"],
+    key="cat_budget_select"
+)
+cat_amount = st.sidebar.number_input("类别预算金额（元）", min_value=0, value=0, key="cat_budget_amount")
+if st.sidebar.button("💾 保存类别预算"):
+    conn = sqlite3.connect("finance.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id FROM category_budget WHERE category=? AND year_month=? AND user_id=?",
+        (cat_select, year_month, 1)
+    )
+    existing = cursor.fetchone()
+    if existing:
+        cursor.execute(
+            "UPDATE category_budget SET amount=? WHERE category=? AND year_month=? AND user_id=?",
+            (cat_amount, cat_select, year_month, 1)
+        )
+    else:
+        cursor.execute(
+            "INSERT INTO category_budget (category, year_month, amount, user_id) VALUES (?, ?, ?, ?)",
+            (cat_select, year_month, cat_amount, 1)
+        )
+    conn.commit()
+    conn.close()
+    st.sidebar.success(f"{cat_select} 类别预算已保存！")
+
+# ========== 页面内容 ==========
 if page == "🏠 记账主页":
     st.title("📒 我的记账本")
     st.caption("第一步：数据库已准备就绪，下一步将添加记账表单。")
