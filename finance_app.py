@@ -93,9 +93,13 @@ if page == "🏠 记账主页":
     # 记账表单
     st.markdown("---")
     st.subheader("📝 记账表单")
+    trans_type = st.radio("类型", ["支出", "收入"], index=0, key="trans_type_radio")
+    if trans_type == "支出":
+        category_options = ["餐饮", "购物", "交通", "娱乐", "住宿", "医疗", "教育", "通讯", "人情", "其他"]
+    else:
+        category_options = ["工资", "奖金", "兼职", "理财", "红包", "报销", "其他"]
     with st.form("记账表单"):
-        trans_type = st.radio("类型", ["支出", "收入"], index=0)
-        category = st.selectbox("类别", ["餐饮", "购物", "交通", "娱乐", "住宿", "医疗", "教育", "通讯", "人情", "其他"], index=0)
+        category = st.selectbox("类别", category_options, index=0)
         amount = st.number_input("金额（元）", min_value=0, step=1)
         trans_date = st.date_input("日期", value=today)
         submitted = st.form_submit_button("记一笔")
