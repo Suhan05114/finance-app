@@ -58,7 +58,7 @@ year_month = today.strftime("%Y-%m")
 
 # ---------- 侧边栏：页面导航 ----------
 st.sidebar.markdown("---")
-page = st.sidebar.radio("导航", ["🏠 记账主页", "📊 数据分析"])
+page = st.sidebar.radio("导航", ["🏠 记账主页", "📊 数据分析", "📋 月度报告"])
 
 # ---------- 侧边栏：预算 ----------
 st.sidebar.markdown("---")
@@ -396,3 +396,96 @@ elif page == "📊 数据分析":
                         st.markdown(suggestion)
                     except Exception as e:
                         st.error(f"AI 调用失败：{e}")
+
+
+# ========== 页面：月度报告 ==========
+elif page == "📋 月度报告":
+    st.title("📋 月度财务报告")
+    st.caption("基于 AI 自动生成本月财务分析报告")
+
+    st.markdown("---")
+
+    if st.button("📊 生成月度报告"):
+        # 查询本月所有支出记录
+        conn = sqlite3.connect("finance.db")
+        cursor = conn.cursor()
+
+        # 本月总支出
+        cursor.execute(
+            "SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE type='支出' AND substr(date, 1, 7)=?",
+            (year_month,)
+        )
+        total_expense = cursor.fetchone()[0]
+
+        # 按类别汇总
+        cursor.execute(
+            "SELECT category, SUM(amount) FROM transactions "
+            "WHERE type='支出' AND substr(date, 1, 7)=? "
+            "GROUP BY category ORDER BY SUM(amount) DESC",
+            (year_month,)
+        )
+        cat_rows = cursor.fetchall()
+
+        # 查询类别预算
+        cursor.execute(
+            "SELECT category, amount FROM category_budget WHERE year_month=? AND user_id=?",
+            (year_month, 1)
+        )
+        budget_map = dict(cursor.fetchall())
+        conn.close()
+
+        if total_expense == 0:
+            st.warning("本月暂无支出，无法生成报告")
+        else:
+            # 构建结构化数据文本
+            data_text = f"本月总支出：¥{total_expense:.2f}\n\n"
+            data_text += "按类别汇总：\n"
+            for cat, amt in cat_rows:
+                data_text += f"  - {cat}：¥{amt:.2f}"
+                if cat in budget_map:
+                    data_text += f"（预算 ¥{budget_map[cat]:.2f}"
+                    diff = budget_map[cat] - amt
+                    if diff < 0:
+                        data_text += f"，超支 ¥{-diff:.2f}）\n"
+                    else:
+                        data_text += f"，剩余 ¥{diff:.2f}）\n"
+                else:
+                    data_text += "（未设置预算）\n"
+
+            api_key = st.secrets.get("DEEPSEEK_API_KEY", "")
+            if not api_key:
+                st.error("未配置 DEEPSEEK_API_KEY，请在 Streamlit Cloud 的 Settings > Secrets 中添加，或本地创建 .streamlit/secrets.toml 文件。")
+            else:
+                with st.spinner("AI 正在生成月度财务报告，请稍候…"):
+                    try:
+                        client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+                        response = client.chat.completions.create(
+                            model="deepseek-chat",
+                            messages=[
+                                {"role": "system", "content": "你是一位专业的财务分析师，擅长根据用户的消费数据生成简洁、实用的月度财务报告。请严格按照用户要求的 Markdown 格式输出。"},
+                                {"role": "user", "content": f"""请根据以下数据生成本月财务报告：
+
+{data_text}
+
+请严格按照以下 Markdown 格式输出：
+
+# 📊 本月财务报告（{year_month}）
+## 一、总体概况
+- 本月总支出：XXX元
+- 支出最多的类别：XXX（XX元）
+## 二、预算执行情况
+- 超支类别：XXX（超支XX元），如果没有超支则写"本月无超支类别"
+- 健康类别：XXX（预算剩余XX元），列出预算剩余最多的2个类别
+## 三、改进建议
+1. 第一条建议
+2. 第二条建议
+3. 第三条建议"""}
+                            ],
+                            temperature=0.7,
+                            max_tokens=600
+                        )
+                        report = response.choices[0].message.content
+                        st.success("报告已生成：")
+                        st.markdown(report)
+                    except Exception as e:
+                        st.error(f"报告生成失败，请稍后重试。错误信息：{e}")
