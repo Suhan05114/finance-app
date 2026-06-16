@@ -8,29 +8,28 @@ from openai import OpenAI
 st.set_page_config(page_title="个人理财储蓄助手 · 极简记账本", layout="wide")
 
 # ---------- 智能分类映射 ----------
-CATEGORY_MAP = {
-    "餐饮": ["吃饭", "面条", "麦当劳", "肯德基", "外卖", "早餐", "午餐", "晚餐", "火锅", "烧烤", "食堂", "饭店"],
-    "交通": ["打车", "地铁", "公交", "加油", "停车", "滴滴", "高铁", "火车", "机票", "飞机"],
-    "购物": ["淘宝", "京东", "拼多多", "衣服", "鞋子", "超市", "日用品", "数码", "手机"],
-    "娱乐": ["电影", "唱歌", "游戏", "充值", "旅游", "景点", "门票"],
-    "居住": ["房租", "房贷", "水电", "物业", "网费"],
+category_map = {
+    "餐饮": ["饭", "吃", "面", "麦当劳", "肯德基", "外卖", "早餐", "午餐", "晚餐", "食堂", "餐厅"],
+    "交通": ["打车", "地铁", "公交", "加油", "停车", "滴滴", "火车", "飞机"],
+    "购物": ["淘宝", "京东", "拼多多", "买", "衣服", "鞋子", "包", "数码"],
+    "娱乐": ["电影", "唱歌", "游戏", "充值", "KTV", "旅游", "景点"],
     "工资": ["工资", "薪水", "奖金", "兼职"],
-    "其他": []
 }
 
-STANDARD_CATEGORIES = list(CATEGORY_MAP.keys())
+STANDARD_CATEGORIES = list(category_map.keys())
 
 
-def auto_classify(user_input):
-    """根据输入文字自动匹配标准类别"""
-    if not user_input:
-        return user_input
-    lower = user_input.lower()
-    for std_cat, keywords in CATEGORY_MAP.items():
+def auto_categorize(input_text):
+    """遍历 category_map，检查 input_text 是否包含某个关键词（包含匹配，不区分大小写）。
+       匹配到则返回标准类别名称，否则返回原样。"""
+    if not input_text:
+        return input_text
+    lower = input_text.lower()
+    for std_cat, keywords in category_map.items():
         for kw in keywords:
             if kw.lower() in lower:
                 return std_cat
-    return user_input
+    return input_text
 
 
 # ---------- 数据库初始化 ----------
@@ -180,7 +179,7 @@ if page == "🏠 记账主页":
         submitted = st.form_submit_button("记一笔")
 
     if submitted:
-        final_category = auto_classify(category)
+        final_category = auto_categorize(category)
         conn = sqlite3.connect("finance.db")
         cursor = conn.cursor()
         cursor.execute(
