@@ -874,6 +874,54 @@ elif page == "📋 月度报告":
             (year_month, 1)
         )
         budget_map = dict(cursor.fetchall())
+
+        # [新增] 负债数据查询
+        # 下月月份
+        if today.month == 12:
+            next_month = f"{today.year + 1}-01"
+        else:
+            next_month = f"{today.year}-{today.month + 1:02d}"
+
+        # a. 当前总负债余额
+        cursor.execute(
+            "SELECT COALESCE(SUM(d.total_amount - COALESCE(r.repaid, 0)), 0) "
+            "FROM debts d "
+            "LEFT JOIN (SELECT debt_id, SUM(repayment_amount) AS repaid FROM debt_repayments GROUP BY debt_id) r "
+            "ON d.id = r.debt_id "
+            "WHERE d.status = '进行中'"
+        )
+        total_debt_balance = cursor.fetchone()[0]
+
+        # b. 本月应还款总额
+        cursor.execute(
+            "SELECT COALESCE(SUM(d.total_amount - COALESCE(r.repaid, 0)), 0) "
+            "FROM debts d "
+            "LEFT JOIN (SELECT debt_id, SUM(repayment_amount) AS repaid FROM debt_repayments GROUP BY debt_id) r "
+            "ON d.id = r.debt_id "
+            "WHERE d.status = '进行中' AND substr(d.due_date, 1, 7) = ?",
+            (year_month,)
+        )
+        due_this_month = cursor.fetchone()[0]
+
+        # c. 本月已还款总额
+        cursor.execute(
+            "SELECT COALESCE(SUM(repayment_amount), 0) FROM debt_repayments "
+            "WHERE substr(repayment_date, 1, 7) = ?",
+            (year_month,)
+        )
+        repaid_this_month = cursor.fetchone()[0]
+
+        # d. 下月还款预警
+        cursor.execute(
+            "SELECT d.debt_type, d.total_amount - COALESCE(r.repaid, 0) AS remaining, d.due_date "
+            "FROM debts d "
+            "LEFT JOIN (SELECT debt_id, SUM(repayment_amount) AS repaid FROM debt_repayments GROUP BY debt_id) r "
+            "ON d.id = r.debt_id "
+            "WHERE d.status = '进行中' AND substr(d.due_date, 1, 7) = ?",
+            (next_month,)
+        )
+        next_month_warnings = cursor.fetchall()
+
         conn.close()
 
         if total_expense == 0:
@@ -893,6 +941,21 @@ elif page == "📋 月度报告":
                         data_text += f"，剩余 ¥{diff:.2f}）\n"
                 else:
                     data_text += "（未设置预算）\n"
+
+            # [新增] 负债数据追加
+            data_text += "\n负债数据：\n"
+            if total_debt_balance > 0:
+                data_text += f"- 当前总负债余额：¥{total_debt_balance:.2f}\n"
+                data_text += f"- 本月应还款总额：¥{due_this_month:.2f}\n"
+                data_text += f"- 本月已还款总额：¥{repaid_this_month:.2f}\n"
+                if next_month_warnings:
+                    data_text += "- 下月还款预警：\n"
+                    for debt_type, remaining, due_d in next_month_warnings:
+                        data_text += f"    · {debt_type} 剩余¥{remaining:.2f}，到期日 {due_d}\n"
+                else:
+                    data_text += "- 下月还款预警：无\n"
+            else:
+                data_text += "- 暂无未结清负债\n"
 
             api_key = st.secrets.get("DEEPSEEK_API_KEY", "")
             if not api_key:
@@ -918,7 +981,13 @@ elif page == "📋 月度报告":
 ## 二、预算执行情况
 - 超支类别：XXX（超支XX元），如果没有超支则写"本月无超支类别"
 - 健康类别：XXX（预算剩余XX元），列出预算剩余最多的2个类别
-## 三、改进建议
+## 三、负债概览
+- 当前总负债余额：XXX元
+- 本月应还款总额：XXX元
+- 本月已还款总额：XXX元
+- 下月还款预警：X笔负债即将到期（列出：类型+金额+到期日），如果没有则写"无"
+- 如果用户没有任何未结清负债，此部分整体写为"暂无未结清负债，继续保持！"
+## 四、改进建议
 1. 第一条建议
 2. 第二条建议
 3. 第三条建议"""}
