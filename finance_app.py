@@ -7,6 +7,32 @@ from openai import OpenAI
 
 st.set_page_config(page_title="个人理财储蓄助手 · 极简记账本", layout="wide")
 
+# ---------- 智能分类映射 ----------
+CATEGORY_MAP = {
+    "餐饮": ["吃饭", "面条", "麦当劳", "肯德基", "外卖", "早餐", "午餐", "晚餐", "火锅", "烧烤", "食堂", "饭店"],
+    "交通": ["打车", "地铁", "公交", "加油", "停车", "滴滴", "高铁", "火车", "机票", "飞机"],
+    "购物": ["淘宝", "京东", "拼多多", "衣服", "鞋子", "超市", "日用品", "数码", "手机"],
+    "娱乐": ["电影", "唱歌", "游戏", "充值", "旅游", "景点", "门票"],
+    "居住": ["房租", "房贷", "水电", "物业", "网费"],
+    "工资": ["工资", "薪水", "奖金", "兼职"],
+    "其他": []
+}
+
+STANDARD_CATEGORIES = list(CATEGORY_MAP.keys())
+
+
+def auto_classify(user_input):
+    """根据输入文字自动匹配标准类别"""
+    if not user_input:
+        return user_input
+    lower = user_input.lower()
+    for std_cat, keywords in CATEGORY_MAP.items():
+        for kw in keywords:
+            if kw.lower() in lower:
+                return std_cat
+    return user_input
+
+
 # ---------- 数据库初始化 ----------
 conn = sqlite3.connect("finance.db")
 cursor = conn.cursor()
@@ -31,6 +57,16 @@ cursor.execute("""
     )
 """)
 
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS category_budget (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        category TEXT,
+        year_month TEXT,
+        amount REAL,
+        user_id INTEGER DEFAULT 1
+    )
+""")
+
 conn.commit()
 conn.close()
 
@@ -41,7 +77,7 @@ year_month = today.strftime("%Y-%m")
 st.sidebar.markdown("---")
 page = st.sidebar.radio("导航", ["🏠 记账主页", "📊 数据分析"])
 
-# ---------- 侧边栏：预算 ----------
+# ---------- 侧边栏：月度总预算 ----------
 st.sidebar.markdown("---")
 
 conn = sqlite3.connect("finance.db")
@@ -57,8 +93,8 @@ budget_row = cursor.fetchone()
 conn.close()
 
 st.sidebar.subheader("📊 月度预算")
-budget_input = st.sidebar.number_input("设置本月预算总金额（元）", min_value=0, value=3000)
-if st.sidebar.button("保存预算"):
+budget_input = st.sidebar.number_input("设置本月预算总金额（元）", min_value=0, value=3000, key="total_budget")
+if st.sidebar.button("保存预算", key="save_total_budget"):
     conn = sqlite3.connect("finance.db")
     cursor = conn.cursor()
     cursor.execute("SELECT id FROM budget WHERE year_month=? AND user_id=?", (year_month, 1))
@@ -84,6 +120,49 @@ if budget_row:
 else:
     st.sidebar.info("未设置本月预算")
 
+# ---------- 侧边栏：类别预算管理 ----------
+st.sidebar.markdown("---")
+st.sidebar.subheader("🏷️ 类别预算管理")
+
+# 读取当月已有的类别预算
+conn = sqlite3.connect("finance.db")
+cat_df = pd.read_sql_query(
+    "SELECT category, amount FROM category_budget WHERE year_month=? AND user_id=?",
+    conn,
+    params=(year_month, 1)
+)
+conn.close()
+
+if not cat_df.empty:
+    for _, row in cat_df.iterrows():
+        st.sidebar.text(f"{row['category']}: ¥{row['amount']:.2f}")
+else:
+    st.sidebar.caption("暂无类别预算")
+
+cat_budget_category = st.sidebar.selectbox("选择类别", STANDARD_CATEGORIES, key="cat_budget_cat")
+cat_budget_amount = st.sidebar.number_input("类别预算金额（元）", min_value=0, value=500, step=100, key="cat_budget_amt")
+if st.sidebar.button("保存类别预算", key="save_cat_budget"):
+    conn = sqlite3.connect("finance.db")
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id FROM category_budget WHERE category=? AND year_month=? AND user_id=?",
+        (cat_budget_category, year_month, 1)
+    )
+    existing = cursor.fetchone()
+    if existing:
+        cursor.execute(
+            "UPDATE category_budget SET amount=? WHERE category=? AND year_month=? AND user_id=?",
+            (cat_budget_amount, cat_budget_category, year_month, 1)
+        )
+    else:
+        cursor.execute(
+            "INSERT INTO category_budget (category, year_month, amount, user_id) VALUES (?, ?, ?, ?)",
+            (cat_budget_category, year_month, cat_budget_amount, 1)
+        )
+    conn.commit()
+    conn.close()
+    st.sidebar.success(f"{cat_budget_category} 预算已保存！")
+
 
 # ========== 页面：记账主页 ==========
 if page == "🏠 记账主页":
@@ -101,15 +180,19 @@ if page == "🏠 记账主页":
         submitted = st.form_submit_button("记一笔")
 
     if submitted:
+        final_category = auto_classify(category)
         conn = sqlite3.connect("finance.db")
         cursor = conn.cursor()
         cursor.execute(
             "INSERT INTO transactions (type, category, amount, date, user_id) VALUES (?, ?, ?, ?, ?)",
-            (trans_type, category, amount, trans_date.strftime("%Y-%m-%d"), 1)
+            (trans_type, final_category, amount, trans_date.strftime("%Y-%m-%d"), 1)
         )
         conn.commit()
         conn.close()
-        st.success("记账成功！")
+        if final_category != category:
+            st.success(f"记账成功！已智能归类为「{final_category}」")
+        else:
+            st.success("记账成功！")
 
     st.markdown("---")
 
@@ -128,7 +211,7 @@ if page == "🏠 记账主页":
 
     st.markdown("---")
 
-    # 本月支出按类别汇总
+    # 本月支出按类别汇总（含预算和进度）
     st.subheader("📂 本月支出分类汇总")
     cursor.execute(
         "SELECT category, SUM(amount) FROM transactions "
@@ -137,12 +220,31 @@ if page == "🏠 记账主页":
         (year_month,)
     )
     rows = cursor.fetchall()
+
+    # 读取类别预算
+    cursor.execute(
+        "SELECT category, amount FROM category_budget WHERE year_month=? AND user_id=?",
+        (year_month, 1)
+    )
+    cat_budgets = dict(cursor.fetchall())
     conn.close()
 
     if rows:
-        df = pd.DataFrame(rows, columns=["类别", "金额（元）"])
-        df["金额（元）"] = df["金额（元）"].map(lambda x: f"¥{x:.2f}")
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        for cat, total in rows:
+            budget_val = cat_budgets.get(cat, None)
+            col1, col2, col3, col4 = st.columns([2, 1.5, 1.5, 2])
+            col1.write(f"**{cat}**")
+            col2.write(f"¥{total:.2f}")
+            if budget_val:
+                col3.write(f"¥{budget_val:.2f}")
+                ratio = min(total / budget_val, 1.0) if budget_val > 0 else 1.0
+                pct = total / budget_val * 100 if budget_val > 0 else 0
+                col4.progress(ratio, text=f"{pct:.0f}%")
+                if total > budget_val:
+                    col4.markdown(f':red[⚠️ 超支 ¥{total - budget_val:.2f}]')
+            else:
+                col3.write("未设置")
+                col4.write("—")
     else:
         st.text("本月暂无支出")
 
@@ -234,7 +336,6 @@ elif page == "📊 数据分析":
     st.subheader("🤖 AI 省钱建议")
 
     if st.button("🤖 获取 AI 省钱建议"):
-        # 查询最近30天的支出记录
         cutoff_date = (today - timedelta(days=30)).strftime("%Y-%m-%d")
         conn = sqlite3.connect("finance.db")
         ai_df = pd.read_sql_query(
