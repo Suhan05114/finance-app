@@ -209,6 +209,26 @@ elif page == "📊 数据分析":
     else:
         st.info("暂无支出数据，无法绘制趋势图")
 
+    # 本月支出结构饼图
+    st.markdown("---")
+    st.subheader("🍩 本月支出结构")
+    conn = sqlite3.connect("finance.db")
+    pie_df = pd.read_sql_query(
+        "SELECT category, SUM(amount) AS total FROM transactions "
+        "WHERE type='支出' AND substr(date, 1, 7)=? "
+        "GROUP BY category",
+        conn,
+        params=(year_month,)
+    )
+    conn.close()
+
+    if not pie_df.empty:
+        pie_fig = px.pie(pie_df, names="category", values="total", title="本月支出结构", hole=0.3)
+        pie_fig.update_traces(textinfo="label+percent")
+        st.plotly_chart(pie_fig, use_container_width=True)
+    else:
+        st.info("本月暂无支出，无法生成饼图")
+
     # AI 省钱建议
     st.markdown("---")
     st.subheader("🤖 AI 省钱建议")
