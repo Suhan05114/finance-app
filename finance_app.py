@@ -7,6 +7,99 @@ from openai import OpenAI
 
 st.set_page_config(page_title="个人理财储蓄助手 · 极简记账本", layout="wide")
 
+# [新增] 全局自定义 CSS 样式
+st.markdown("""
+<style>
+    /* === 配色变量 === */
+    :root {
+        --primary: #1a5276;
+        --secondary: #2e86c1;
+        --success: #27ae60;
+        --danger: #e74c3c;
+        --card-bg: #ffffff;
+        --page-bg: #f5f7fa;
+    }
+
+    /* === 页面背景 === */
+    .stApp {
+        background-color: #f5f7fa;
+    }
+
+    /* === 标题字体 === */
+    h1 { font-size: 2.2rem !important; color: #1a5276 !important; font-weight: 700 !important; }
+    h2 { font-size: 1.8rem !important; color: #1a5276 !important; font-weight: 600 !important; }
+    h3 { font-size: 1.4rem !important; color: #1a5276 !important; font-weight: 600 !important; }
+
+    /* === 卡片容器 === */
+    div[data-testid="stMetric"],
+    div[data-testid="stDataFrame"],
+    div[data-testid="stTable"] {
+        background-color: #ffffff;
+        border-radius: 12px;
+        padding: 1rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        margin: 1.5rem 0;
+    }
+
+    /* === 侧边栏 === */
+    [data-testid="stSidebar"] {
+        background-color: #eef2f7;
+    }
+    [data-testid="stSidebar"] .stRadio label {
+        padding: 8px 12px;
+        border-radius: 8px;
+        transition: all 0.2s;
+    }
+    [data-testid="stSidebar"] .stRadio label:hover {
+        background-color: #dce6f0;
+    }
+    [data-testid="stSidebar"] .stRadio div[role="radiogroup"] label[data-selected="true"] span {
+        background-color: #2e86c1 !important;
+    }
+
+    /* === 按钮 === */
+    .stButton > button {
+        border-radius: 10px !important;
+        font-weight: 500 !important;
+        transition: all 0.2s !important;
+    }
+    .stButton > button:hover {
+        transform: scale(1.03);
+        box-shadow: 0 4px 12px rgba(46,134,193,0.3);
+    }
+    .stButton > button[kind="primary"] {
+        background-color: #2e86c1 !important;
+    }
+
+    /* === 数据表格列头 === */
+    [data-testid="stDataFrame"] th,
+    [data-testid="stTable"] th {
+        background-color: #1a5276 !important;
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+
+    /* === 超支警告 === */
+    .stAlert[data-baseweb="notification"] {
+        border-radius: 10px;
+    }
+    .st-er, .st-exception {
+        font-weight: 700 !important;
+    }
+
+    /* === 进度条 === */
+    .stProgress > div > div {
+        border-radius: 10px;
+    }
+
+    /* === 卡片 hover 增强 === */
+    [data-testid="stMetric"]:hover {
+        box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+        transition: box-shadow 0.3s;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # ---------- 数据库初始化 ----------
 conn = sqlite3.connect("finance.db")
 cursor = conn.cursor()
