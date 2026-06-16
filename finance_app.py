@@ -50,6 +50,35 @@ cursor.execute("""
     )
 """)
 
+# [新增] 快捷按钮表
+cursor.execute("""
+    CREATE TABLE IF NOT EXISTS quick_buttons (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT,
+        category TEXT,
+        amount REAL,
+        is_default INTEGER DEFAULT 0,
+        user_id INTEGER DEFAULT 1
+    )
+""")
+
+# 初始化默认按钮（如果表为空）
+cursor.execute("SELECT COUNT(*) FROM quick_buttons")
+if cursor.fetchone()[0] == 0:
+    defaults = [
+        ("早餐+30", "餐饮", 30),
+        ("交通+10", "交通", 10),
+        ("咖啡+25", "餐饮", 25),
+        ("购物+100", "购物", 100),
+        ("外卖+35", "餐饮", 35),
+        ("娱乐+50", "娱乐", 50),
+    ]
+    for name, cat, amt in defaults:
+        cursor.execute(
+            "INSERT INTO quick_buttons (name, category, amount, is_default, user_id) VALUES (?, ?, ?, 1, 1)",
+            (name, cat, amt)
+        )
+
 conn.commit()
 conn.close()
 
@@ -58,7 +87,7 @@ year_month = today.strftime("%Y-%m")
 
 # ---------- 侧边栏：页面导航 ----------
 st.sidebar.markdown("---")
-page = st.sidebar.radio("导航", ["🏠 记账主页", "📊 数据分析", "📋 月度报告"])
+page = st.sidebar.radio("导航", ["🏠 记账主页", "📊 数据分析", "📋 月度报告", "⚙️ 管理快捷按钮"])
 
 # ---------- 侧边栏：预算 ----------
 st.sidebar.markdown("---")
@@ -156,11 +185,11 @@ if page == "🏠 记账主页":
     st.title("📒 我的记账本")
     st.caption("第一步：数据库已准备就绪，下一步将添加记账表单。")
 
-    # [新增] 快捷录入
+    # [新增] 快捷录入（从数据库读取按钮）
     st.markdown("---")
     st.subheader("⚡ 快捷录入")
 
-    def quick_insert(category, amount):
+    def quick_insert(name, category, amount):
         """向数据库插入一条快捷支出记录"""
         conn = sqlite3.connect("finance.db")
         cursor = conn.cursor()
@@ -170,21 +199,24 @@ if page == "🏠 记账主页":
         )
         conn.commit()
         conn.close()
-        st.toast(f"✅ 已记录 {category} ¥{amount:.2f}", icon="💰")
+        st.toast(f"✅ 已记录 {name} ¥{amount:.2f}", icon="💰")
 
-    quick_buttons = [
-        ("🍜 餐饮 +30", "餐饮", 30),
-        ("🚇 交通 +10", "交通", 10),
-        ("☕ 咖啡 +25", "餐饮", 25),
-        ("🛒 购物 +100", "购物", 100),
-        ("🍱 外卖 +35", "餐饮", 35),
-        ("🎬 娱乐 +50", "娱乐", 50),
-    ]
+    # 从数据库读取所有快捷按钮
+    conn = sqlite3.connect("finance.db")
+    btn_df = pd.read_sql_query(
+        "SELECT id, name, category, amount FROM quick_buttons WHERE user_id=1 ORDER BY id",
+        conn
+    )
+    conn.close()
 
-    cols = st.columns(3)
-    for i, (label, cat, amt) in enumerate(quick_buttons):
-        if cols[i % 3].button(label, key=f"quick_{i}"):
-            quick_insert(cat, amt)
+    if not btn_df.empty:
+        cols = st.columns(3)
+        for i, (_, row) in enumerate(btn_df.iterrows()):
+            btn_id = int(row["id"])
+            if cols[i % 3].button(row["name"], key=f"qbtn_{btn_id}"):
+                quick_insert(row["name"], row["category"], row["amount"])
+    else:
+        st.info("暂无快捷按钮，请去管理页面添加")
 
     # 记账表单
     st.markdown("---")
@@ -519,3 +551,66 @@ elif page == "📋 月度报告":
                         st.markdown(report)
                     except Exception as e:
                         st.error(f"报告生成失败，请稍后重试。错误信息：{e}")
+
+
+# ========== 页面：管理快捷按钮 ==========
+elif page == "⚙️ 管理快捷按钮":
+    st.title("⚙️ 管理快捷按钮")
+    st.caption("在这里添加或删除首页的快捷录入按钮")
+
+    st.markdown("---")
+
+    # 显示当前所有按钮
+    conn = sqlite3.connect("finance.db")
+    mgmt_df = pd.read_sql_query(
+        "SELECT id, name, category, amount, is_default FROM quick_buttons WHERE user_id=1 ORDER BY id",
+        conn
+    )
+    conn.close()
+
+    if not mgmt_df.empty:
+        # 表格形式展示
+        display_df = mgmt_df[["name", "category", "amount"]].copy()
+        display_df.columns = ["名称", "类别", "金额"]
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+        st.subheader("🗑️ 删除按钮")
+        cols = st.columns(3)
+        for i, (_, row) in enumerate(mgmt_df.iterrows()):
+            btn_id = int(row["id"])
+            if cols[i % 3].button(f"删除：{row['name']}", key=f"del_qbtn_{btn_id}"):
+                conn = sqlite3.connect("finance.db")
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM quick_buttons WHERE id=?", (btn_id,))
+                conn.commit()
+                conn.close()
+                st.toast(f"已删除 {row['name']}", icon="🗑️")
+    else:
+        st.info("暂无快捷按钮")
+
+    # 添加新按钮
+    st.markdown("---")
+    st.subheader("➕ 添加新按钮")
+    with st.form("add_quick_button"):
+        new_name = st.text_input("按钮名称", placeholder="例如：午餐+30")
+        new_category = st.selectbox(
+            "类别",
+            ["餐饮", "购物", "交通", "娱乐", "住宿", "医疗", "教育", "通讯", "人情", "其他"]
+        )
+        new_amount = st.number_input("金额（元）", min_value=0, step=1)
+        add_submitted = st.form_submit_button("添加")
+
+    if add_submitted:
+        if new_name.strip():
+            conn = sqlite3.connect("finance.db")
+            cursor = conn.cursor()
+            cursor.execute(
+                "INSERT INTO quick_buttons (name, category, amount, is_default, user_id) VALUES (?, ?, ?, 0, 1)",
+                (new_name, new_category, new_amount)
+            )
+            conn.commit()
+            conn.close()
+            st.success(f"已添加按钮：{new_name}")
+        else:
+            st.warning("请输入按钮名称")
