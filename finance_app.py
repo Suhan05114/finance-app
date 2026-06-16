@@ -87,13 +87,13 @@ year_month = today.strftime("%Y-%m")
 
 # ---------- 侧边栏：页面导航 ----------
 st.sidebar.markdown("---")
-# 用 session_state 管理页面切换，支持从快捷录入区域跳转到管理页
+# 用 session_state 管理页面切换，支持从快捷录入区域跳转到自定义页
 if "nav_page" not in st.session_state:
     st.session_state["nav_page"] = "🏠 记账主页"
 page = st.sidebar.radio(
     "导航",
-    ["🏠 记账主页", "📊 数据分析", "📋 月度报告", "⚙️ 管理快捷按钮"],
-    index=["🏠 记账主页", "📊 数据分析", "📋 月度报告", "⚙️ 管理快捷按钮"].index(st.session_state["nav_page"])
+    ["🏠 记账主页", "📊 数据分析", "📋 月度报告", "⚙️ 自定义快捷按钮"],
+    index=["🏠 记账主页", "📊 数据分析", "📋 月度报告", "⚙️ 自定义快捷按钮"].index(st.session_state["nav_page"])
 )
 st.session_state["nav_page"] = page
 
@@ -224,11 +224,11 @@ if page == "🏠 记账主页":
             if cols[i % 3].button(row["name"], key=f"qbtn_{btn_id}"):
                 quick_insert(row["name"], row["category"], row["amount"])
     else:
-        st.info("暂无快捷按钮，请去管理页面添加")
+        st.info("暂无快捷按钮，请去自定义页面添加")
 
-    # [新增] 跳转到管理页的按钮
-    if st.button("📝 管理", key="goto_mgmt"):
-        st.session_state["nav_page"] = "⚙️ 管理快捷按钮"
+    # [新增] 跳转到自定义页的按钮
+    if st.button("📝 自定义", key="goto_mgmt"):
+        st.session_state["nav_page"] = "⚙️ 自定义快捷按钮"
         st.rerun()
 
     # 记账表单
@@ -566,9 +566,9 @@ elif page == "📋 月度报告":
                         st.error(f"报告生成失败，请稍后重试。错误信息：{e}")
 
 
-# ========== 页面：管理快捷按钮 ==========
-elif page == "⚙️ 管理快捷按钮":
-    st.title("⚙️ 管理快捷按钮")
+# ========== 页面：自定义快捷按钮 ==========
+elif page == "⚙️ 自定义快捷按钮":
+    st.title("⚙️ 自定义快捷按钮")
     st.caption("在这里添加或删除首页的快捷录入按钮")
 
     st.markdown("---")
